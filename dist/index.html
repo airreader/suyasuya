@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <?!= include('main.css') ?>
+  </head>
+  <body>
+    <div id="app" class="md-layout md-alignment-top-center">
+      <div class="md-layout-item md-size-66">
+        <div class="page-container">
+          <md-app>
+            <md-app-toolbar class="md-primary">
+              <span class="md-title">すやすやおやすみさん</span>
+            </md-app-toolbar>
+            <md-app-content>
+              <div class="md-layout">
+                <md-field>
+                  <label>名前(はてなID)</label>
+                  <md-input v-model="username"></md-input>
+                </md-field>
+              </div>
+              <div class="md-layout md-gutter">
+                <div class="block md-layout-item">
+                  <span class="md-caption">開始日</span>
+                  <md-datepicker v-model="startDate" />
+                </div>
+                <div class="block md-layout-item">
+                  <span class="md-caption">終了日</span>
+                  <md-datepicker v-model="endDate" />
+                </div>
+              </div>
+              <div class="md-layout md-alignment-top-center">
+                <md-button class="md-raised md-primary holliday-button" @click="createHollidayEvent" v-bind:disabled="isLoading">😪お休みを登録</md-button>
+              </div>
+              <div style="height: 16px"></div>
+              <md-divider></md-divider>
+              <md-tabs @md-changed="changeTab">
+                <md-tab id="tab-users-calendar" md-label="送信先登録済みカレンダー">
+                  <md-list>
+                      <md-list-item v-for="calendarData in usersCalendars">
+                        <div style="width:16px;height:16px;border-radius:3px;margin-right:6px" v-bind:style="{ 'background-color': calendarData.color }"></div>
+                        <span class="md-list-item-text">{{calendarData.name}}</span>
+                      </md-list-item>
+                    </md-list>
+                </md-tab>
+                <md-tab id="tab-all-calendar" md-label="送信先管理">
+                  <md-list>
+                    <md-list-item v-for="calendarData in checkedCalendarList">
+                      <md-checkbox v-model="calendarData.isAdded"  @change="checkCalenadar($event, calendarData)" />
+                      <span class="md-list-item-text" v-bind:style="{ 'border-bottom': '3px solid ' + calendarData.color }">{{calendarData.name}}</span>
+                    </md-list-item>
+                  </md-list>
+                </md-tab>
+              </md-tabs>
+
+            </md-app-content>
+          </md-app>
+        </div>
+      </div>
+    </div>
+    <?!= include('main.js') ?>
+  </body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "timeZone": "Asia/Tokyo",
+  "dependencies": {
+    "enabledAdvancedServices": [
+      {
+        "userSymbol": "Calendar",
+        "serviceId": "calendar",
+        "version": "v3"
+      }
+    ]
+  },
+  "webapp": {
+    "executeAs": "USER_ACCESSING",
+    "access": "DOMAIN"
+  },
+  "exceptionLogging": "STACKDRIVER"
+}

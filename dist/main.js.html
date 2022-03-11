@@ -1,0 +1,108 @@
+<script>
+  //google.script.runをPromiseで提供するwrapper
+  function scriptRunPromise() {
+    var gs = {};
+    var ks = Object.keys(google.script.run);
+    for (var i=0; i < ks.length; i++) {
+      gs[ks[i]] = (function(k) {
+        return function() {
+          var args = arguments;
+          return new Promise(function(resolve, reject) {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler(reject)
+              [k].apply(google.script.run, args);
+          });
+        }
+      })(ks[i])
+    }
+    return gs;
+  }
+</script>
+<script src="https://unpkg.com/vue@2.6.14/dist/vue.min.js"></script>
+<script src="https://unpkg.com/vue-material"></script>
+<script>
+  Vue.use(VueMaterial.default)
+
+  new Vue({
+    el: '#app',
+    data: function() {
+      return {
+        allCalendars: [],
+        usersCalendars: [],
+        startDate: new Date(),
+        endDate: new Date(),
+        username: "",
+        isLoading: false,
+      }
+    },
+    created : function () {
+      this.init();
+    },
+    computed: {
+      checkedCalendarList: function() {
+        return this.allCalendars.map((calendar) => {
+          return {
+            id: calendar.id,
+            name: calendar.name,
+            color: calendar.color,
+            isAdded: this.usersCalendars.some((usersCalendar) => {
+              return usersCalendar.id === calendar.id
+            })
+          }
+        })
+      }
+    },
+    methods: {
+      init: function() {
+        scriptRunPromise().getUsername().then((username) => {
+          this.username = username;
+        })
+        this.getUsersCalendars();
+      },
+      getUsersCalendars: function() {
+        scriptRunPromise().getUserCalnedars().then((userCalendars) => {
+          this.usersCalendars = userCalendars;
+        })
+      },
+      getAllCalendars: function() {
+        scriptRunPromise().getAllCalendarsData().then((calendarData) => {
+          this.allCalendars = calendarData;
+        })
+      },
+      addUserCalendar: function(calendarData) {
+        scriptRunPromise().addUserCalendar(calendarData.name, calendarData.id, calendarData.color).then((userCalendars) => {
+          this.usersCalendars = userCalendars;
+        })
+      },
+      deleteUserCalendar: function(calendarId) {
+        scriptRunPromise().deleteUserCalendar(calendarId).then((userCalendars) => {
+          this.usersCalendars = userCalendars;
+        });
+      },
+      checkCalenadar: function(event, calendarData) {
+        console.log(event, calendarData)
+        if(calendarData.isAdded) {
+          this.addUserCalendar(calendarData);
+        } else {
+          this.deleteUserCalendar(calendarData.id);
+        }
+      },
+      createHollidayEvent: function() {
+        this.isLoading = true;
+        scriptRunPromise().createHollidayEvent(this.username, this.getDateString(this.startDate), this.getDateString(this.endDate)).then(() => {
+          this.isLoading = false;
+          window.alert("カレンダーへの登録が完了しました！")
+        })
+      },
+      getDateString: function(date) {
+        return String(date.getFullYear()) + '-' + ("0"+String(date.getMonth()+1)).slice(-2) +'-'+ ("0"+String(date.getDate())).slice(-2)
+      },
+      changeTab: function(tabId) {
+        if(tabId === "tab-all-calendar") {
+          this.getAllCalendars();
+        }
+      }
+    }
+  })
+</script>
