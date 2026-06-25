@@ -1,0 +1,24 @@
+{
+  "name": "suyasuya",
+  "version": "1.0.0",
+  "description": "Google Apps Script application to sync paid holidays with Google Calendar",
+  "main": "dist/code.js",
+  "scripts": {
+    "build:css": "npx @tailwindcss/cli -i ./src/styles.css -o ./dist/tailwind.css --minify",
+    "copy-assets": "node scripts/copy-assets.js",
+    "build:tsc": "tsc",
+    "build": "npm run build:css && npm run copy-assets && npm run build:tsc"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.1",
+    "@types/google-apps-script": "^1.0.83",
+    "autoprefixer": "^10.5.2",
+    "daisyui": "^5.6.0",
+    "postcss": "^8.5.15",
+    "tailwindcss": "^4.3.1",
+    "typescript": "7.0.1-rc"
+  }
+}

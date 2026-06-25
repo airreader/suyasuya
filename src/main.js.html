@@ -1,0 +1,367 @@
+<script>
+  //google.script.runをPromiseで提供するwrapper
+  function scriptRunPromise() {
+    var gs = {};
+    var ks = Object.keys(google.script.run);
+    for (var i=0; i < ks.length; i++) {
+      gs[ks[i]] = (function(k) {
+        return function() {
+          var args = arguments;
+          return new Promise(function(resolve, reject) {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler(reject)
+              [k].apply(google.script.run, args);
+          });
+        }
+      })(ks[i])
+    }
+    return gs;
+  }
+</script>
+<script>
+  // アプリケーションの状態管理
+  const state = {
+    username: "",
+    holidayType: "all-day", // "all-day" | "time-off"
+    startDate: "",
+    endDate: "",
+    timeOffDate: "",
+    timeOffStartTime: "13:00",
+    timeOffEndTime: "18:00",
+    usersCalendars: [],
+    allCalendars: [],
+    isLoading: false,
+    isAllCalendarsLoaded: false
+  };
+
+  // DOM要素のキャッシュ
+  let elements = {};
+
+  // 日付の初期化（今日の日付を YYYY-MM-DD 形式で設定）
+  function initDates() {
+    const today = new Date();
+    const formattedDate = formatDate(today);
+    state.startDate = formattedDate;
+    state.endDate = formattedDate;
+    state.timeOffDate = formattedDate;
+    
+    elements.startDateInput.value = formattedDate;
+    elements.endDateInput.value = formattedDate;
+    elements.endDateInput.min = formattedDate;
+    
+    elements.timeOffDateInput.value = formattedDate;
+    elements.timeOffStartTimeInput.value = state.timeOffStartTime;
+    elements.timeOffEndTimeInput.value = state.timeOffEndTime;
+  }
+
+  function formatDate(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  // 描画関数
+  function render() {
+    // ローディング状態の反映
+    if (state.isLoading) {
+      elements.btnSubmit.classList.add('btn-disabled');
+      elements.submitSpinner.classList.remove('hidden');
+      elements.btnText.textContent = "登録中...";
+    } else {
+      elements.btnSubmit.classList.remove('btn-disabled');
+      elements.submitSpinner.classList.add('hidden');
+      elements.btnText.textContent = "😪 お休みを登録";
+    }
+
+    // 登録済みカレンダーリストの描画
+    elements.registeredList.innerHTML = "";
+    if (state.usersCalendars.length === 0) {
+      elements.registeredEmpty.classList.remove('hidden');
+    } else {
+      elements.registeredEmpty.classList.add('hidden');
+      state.usersCalendars.forEach(calendar => {
+        const li = document.createElement('li');
+        li.className = "flex items-center gap-3 p-3 bg-base-200 rounded-lg shadow-sm border border-base-300/50";
+        
+        // カラーバッジ
+        const badge = document.createElement('span');
+        badge.className = "w-4 h-4 rounded-full flex-shrink-0";
+        badge.style.backgroundColor = calendar.color;
+        
+        // カレンダー名
+        const name = document.createElement('span');
+        name.className = "font-medium text-base-content text-sm md:text-base truncate";
+        name.textContent = calendar.name;
+        
+        li.appendChild(badge);
+        li.appendChild(name);
+        elements.registeredList.appendChild(li);
+      });
+    }
+
+    // カレンダー管理リストの描画
+    if (state.isAllCalendarsLoaded) {
+      elements.manageList.innerHTML = "";
+      state.allCalendars.forEach(calendar => {
+        const li = document.createElement('li');
+        li.className = "flex items-center justify-between p-3 hover:bg-base-200 rounded-lg transition-colors border-b border-base-300/30 last:border-b-0";
+        
+        const leftDiv = document.createElement('div');
+        leftDiv.className = "flex items-center gap-3 truncate mr-2";
+        
+        // チェックボックス
+        const checkbox = document.createElement('input');
+        checkbox.type = "checkbox";
+        checkbox.className = "checkbox checkbox-primary checkbox-sm flex-shrink-0";
+        checkbox.checked = state.usersCalendars.some(u => u.id === calendar.id);
+        checkbox.addEventListener('change', (e) => handleCalendarCheck(e, calendar));
+        
+        // カレンダー名（下部にカラー線を入れる）
+        const name = document.createElement('span');
+        name.className = "font-medium text-base-content text-sm md:text-base truncate pb-0.5";
+        name.style.borderBottom = `3px solid ${calendar.color}`;
+        name.textContent = calendar.name;
+        
+        leftDiv.appendChild(checkbox);
+        leftDiv.appendChild(name);
+        li.appendChild(leftDiv);
+        elements.manageList.appendChild(li);
+      });
+    }
+  }
+
+  // 初期化処理
+  function init() {
+    // DOM要素のキャッシュ取得
+    elements = {
+      usernameInput: document.getElementById('username'),
+      tabAllDay: document.getElementById('tab-all-day'),
+      tabTimeOff: document.getElementById('tab-time-off'),
+      allDayInputs: document.getElementById('all-day-inputs'),
+      startDateInput: document.getElementById('startDate'),
+      endDateInput: document.getElementById('endDate'),
+      timeOffInputs: document.getElementById('time-off-inputs'),
+      timeOffDateInput: document.getElementById('timeOffDate'),
+      timeOffStartTimeInput: document.getElementById('timeOffStartTime'),
+      timeOffEndTimeInput: document.getElementById('timeOffEndTime'),
+      btnSubmit: document.getElementById('btn-submit'),
+      submitSpinner: document.getElementById('submit-spinner'),
+      btnText: document.getElementById('btn-text'),
+      registeredList: document.getElementById('registered-list'),
+      registeredEmpty: document.getElementById('registered-empty'),
+      manageList: document.getElementById('manage-list'),
+      manageLoading: document.getElementById('manage-loading'),
+      tabRegistered: document.getElementById('tab-registered'),
+      tabManage: document.getElementById('tab-manage')
+    };
+
+    initDates();
+
+    // ユーザー名の取得
+    scriptRunPromise().getUsername()
+      .then((username) => {
+        state.username = username;
+        elements.usernameInput.value = username;
+      })
+      .catch(err => console.error("Error getting username:", err));
+
+    // 登録済みカレンダーの取得
+    scriptRunPromise().getUserCalendars()
+      .then((userCalendars) => {
+        state.usersCalendars = userCalendars;
+        render();
+      })
+      .catch(err => console.error("Error getting user calendars:", err));
+
+    // イベントリスナーの登録
+    elements.usernameInput.addEventListener('input', (e) => {
+      state.username = e.target.value;
+    });
+
+    // 全休/時間休タブの切り替え
+    elements.tabAllDay.addEventListener('change', () => {
+      if (elements.tabAllDay.checked) {
+        state.holidayType = "all-day";
+        elements.allDayInputs.classList.remove('hidden');
+        elements.timeOffInputs.classList.add('hidden');
+      }
+    });
+
+    elements.tabTimeOff.addEventListener('change', () => {
+      if (elements.tabTimeOff.checked) {
+        state.holidayType = "time-off";
+        elements.allDayInputs.classList.add('hidden');
+        elements.timeOffInputs.classList.remove('hidden');
+      }
+    });
+
+    elements.startDateInput.addEventListener('change', (e) => {
+      const newStartDate = e.target.value;
+      state.startDate = newStartDate;
+      
+      // 終了日の最小日付設定
+      elements.endDateInput.min = newStartDate;
+      
+      // 終了日が開始日より前の場合は、同じ日に設定
+      if (!state.endDate || state.endDate < newStartDate) {
+        state.endDate = newStartDate;
+        elements.endDateInput.value = newStartDate;
+      }
+    });
+
+    elements.endDateInput.addEventListener('change', (e) => {
+      state.endDate = e.target.value;
+    });
+
+    elements.timeOffDateInput.addEventListener('change', (e) => {
+      state.timeOffDate = e.target.value;
+    });
+
+    elements.timeOffStartTimeInput.addEventListener('change', (e) => {
+      const newStartTime = e.target.value;
+      state.timeOffStartTime = newStartTime;
+
+      // 終了時間が開始時間以前の場合、自動で4時間後を設定
+      if (state.timeOffEndTime <= newStartTime) {
+        const [hours, minutes] = newStartTime.split(':').map(Number);
+        let targetHours = hours + 4;
+        let targetMinutes = minutes;
+        
+        if (targetHours >= 24) {
+          targetHours = 23;
+          targetMinutes = 59;
+        }
+        
+        const formattedHours = String(targetHours).padStart(2, '0');
+        const formattedMinutes = String(targetMinutes).padStart(2, '0');
+        const nextEndTime = `${formattedHours}:${formattedMinutes}`;
+        
+        state.timeOffEndTime = nextEndTime;
+        elements.timeOffEndTimeInput.value = nextEndTime;
+      }
+    });
+
+    elements.timeOffEndTimeInput.addEventListener('change', (e) => {
+      state.timeOffEndTime = e.target.value;
+    });
+
+    elements.btnSubmit.addEventListener('click', submitHolidayEvent);
+
+    // タブの監視
+    elements.tabManage.addEventListener('change', () => {
+      if (elements.tabManage.checked) {
+        loadAllCalendars();
+      }
+    });
+  }
+
+  // すべてのカレンダーを読み込む
+  function loadAllCalendars() {
+    elements.manageLoading.classList.remove('hidden');
+    elements.manageList.innerHTML = "";
+    state.isAllCalendarsLoaded = false;
+
+    scriptRunPromise().getAllCalendarsData()
+      .then((calendarData) => {
+        state.allCalendars = calendarData;
+        state.isAllCalendarsLoaded = true;
+        elements.manageLoading.classList.add('hidden');
+        render();
+      })
+      .catch(err => {
+        console.error("Error getting all calendars:", err);
+        elements.manageLoading.classList.add('hidden');
+      });
+  }
+
+  // カレンダーのチェック切り替え
+  function handleCalendarCheck(event, calendarData) {
+    const isChecked = event.target.checked;
+    
+    if (isChecked) {
+      // カレンダーの追加
+      scriptRunPromise().addUserCalendar(calendarData.name, calendarData.id, calendarData.color)
+        .then((userCalendars) => {
+          state.usersCalendars = userCalendars;
+          render();
+        })
+        .catch(err => console.error("Error adding calendar:", err));
+    } else {
+      // カレンダーの削除
+      scriptRunPromise().deleteUserCalendar(calendarData.id)
+        .then((userCalendars) => {
+          state.usersCalendars = userCalendars;
+          render();
+        })
+        .catch(err => console.error("Error deleting calendar:", err));
+    }
+  }
+
+  // お休みをカレンダーに登録
+  function submitHolidayEvent() {
+    if (!state.username.trim()) {
+      alert("お休みする人の名前を入力してください。");
+      elements.usernameInput.focus();
+      return;
+    }
+
+    state.isLoading = true;
+    render();
+
+    let promise;
+    if (state.holidayType === "all-day") {
+      if (!state.startDate || !state.endDate) {
+        alert("開始日と終了日を選択してください。");
+        state.isLoading = false;
+        render();
+        return;
+      }
+      promise = scriptRunPromise().createHollidayEvent(
+        state.username,
+        state.startDate,
+        state.endDate
+      );
+    } else {
+      if (!state.timeOffDate || !state.timeOffStartTime || !state.timeOffEndTime) {
+        alert("対象日と時間帯を選択してください。");
+        state.isLoading = false;
+        render();
+        return;
+      }
+      if (state.timeOffEndTime <= state.timeOffStartTime) {
+        alert("終了時間は開始時間より後の時間に設定してください。");
+        state.isLoading = false;
+        render();
+        return;
+      }
+      promise = scriptRunPromise().createTimeOffEvent(
+        state.username,
+        state.timeOffDate,
+        state.timeOffStartTime,
+        state.timeOffEndTime
+      );
+    }
+
+    promise
+      .then(() => {
+        state.isLoading = false;
+        render();
+        alert("カレンダーへの登録が完了しました！");
+      })
+      .catch(err => {
+        state.isLoading = false;
+        render();
+        console.error("Error registering holiday:", err);
+        alert("登録中にエラーが発生しました: " + err.message);
+      });
+  }
+
+  // 初期化開始
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+</script>
