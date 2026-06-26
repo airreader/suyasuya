@@ -1,3 +1,8 @@
+function parseLocalDate(dateString: string): Date {
+  const [year, month, day] = dateString.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
 function createHollidaysAllDayEvent(calendarId: string, username: string, startDate: Date, endDate: Date): void {
   const startStr = Utilities.formatDate(startDate, Session.getScriptTimeZone(), "yyyy-MM-dd");
   const endStr = Utilities.formatDate(endDate, Session.getScriptTimeZone(), "yyyy-MM-dd");
@@ -25,9 +30,8 @@ function createHollidayAllDayEvent(calendarId: string, username: string, date: D
 }
 
 function createWorkingHoursEvent(username: string, startDateString: string, endDateString: string): void {
-  const startDate = new Date(startDateString);
-  const endDate = new Date(endDateString);
-  endDate.setDate(endDate.getDate() + 1);
+  const startDate = parseLocalDate(startDateString);
+  const endDate = parseLocalDate(endDateString);
   const calendarId = "primary";
 
   for (let d = new Date(startDate.getTime()); d <= endDate; d.setDate(d.getDate() + 1)) {
@@ -51,16 +55,19 @@ function createWorkingHoursEvent(username: string, startDateString: string, endD
 function createHollidayEvent(username: string, startDateString: string, endDateString: string): void {
   setUsername(username);
   createWorkingHoursEvent(username, startDateString, endDateString);
-  getUserCalendars().forEach((calendarData) => {
+
+  // 終日の予定を登録するカレンダーのリスト（primary + 共有カレンダー）
+  const calendarIds = ["primary", ...getUserCalendars().map(c => c.id)];
+
+  calendarIds.forEach((calendarId) => {
     if (startDateString === endDateString) {
-      const d = new Date(startDateString);
-      // タイムゾーン周りがめんどくさすぎるので適当に1日戻す
-      createHollidayAllDayEvent(calendarData.id, username, d);
+      const d = parseLocalDate(startDateString);
+      createHollidayAllDayEvent(calendarId, username, d);
     } else {
-      const startDate = new Date(startDateString);
-      const endDate = new Date(endDateString);
+      const startDate = parseLocalDate(startDateString);
+      const endDate = parseLocalDate(endDateString);
       endDate.setDate(endDate.getDate() + 1);
-      createHollidaysAllDayEvent(calendarData.id, username, startDate, endDate);
+      createHollidaysAllDayEvent(calendarId, username, startDate, endDate);
     }
   });
 }
