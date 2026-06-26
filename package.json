@@ -7,7 +7,8 @@
     "build:css": "npx @tailwindcss/cli -i ./src/styles.css -o ./dist/tailwind.css --minify",
     "copy-assets": "node scripts/copy-assets.js",
     "build:tsc": "tsc",
-    "build": "npm run build:css && npm run copy-assets && npm run build:tsc"
+    "build": "npm run build:css && npm run copy-assets && npm run build:tsc",
+    "deploy": "npm run build && clasp push -f"
   },
   "keywords": [],
   "author": "",

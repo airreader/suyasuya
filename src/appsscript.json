@@ -13,5 +13,6 @@
     "executeAs": "USER_ACCESSING",
     "access": "DOMAIN"
   },
-  "exceptionLogging": "STACKDRIVER"
+  "exceptionLogging": "STACKDRIVER",
+  "runtimeVersion": "V8"
 }
